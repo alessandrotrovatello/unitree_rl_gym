@@ -50,11 +50,11 @@ if __name__ == "__main__":
 
         default_angles = np.array(config["default_angles"], dtype=np.float32)
 
-        ang_vel_scale = config["ang_vel_scale"]
-        dof_pos_scale = config["dof_pos_scale"]
-        dof_vel_scale = config["dof_vel_scale"]
+        #ang_vel_scale = config["ang_vel_scale"]
+        #dof_pos_scale = config["dof_pos_scale"]
+        #dof_vel_scale = config["dof_vel_scale"]
         action_scale = config["action_scale"]
-        cmd_scale = np.array(config["cmd_scale"], dtype=np.float32)
+        #cmd_scale = np.array(config["cmd_scale"], dtype=np.float32)
 
         num_actions = config["num_actions"]
         num_obs = config["num_obs"]
@@ -82,6 +82,7 @@ if __name__ == "__main__":
         while viewer.is_running() and time.time() - start < simulation_duration:
             step_start = time.time()
             tau = pd_control(target_dof_pos, d.qpos[7:], kps, np.zeros_like(kds), d.qvel[6:], kds)
+
             d.ctrl[:] = tau
             # mj_step can be replaced with code that also evaluates
             # a policy and applies a control signal before stepping the physics.
@@ -95,27 +96,22 @@ if __name__ == "__main__":
                 qj = d.qpos[7:]
                 dqj = d.qvel[6:]
                 quat = d.qpos[3:7]
+                base_vel = d.qvel[:3]
                 omega = d.qvel[3:6]
-
-                qj = (qj - default_angles) * dof_pos_scale
-                dqj = dqj * dof_vel_scale
+                
+                qj = (qj - default_angles)
                 gravity_orientation = get_gravity_orientation(quat)
-                omega = omega * ang_vel_scale
 
-                period = 0.8
-                count = counter * simulation_dt
-                phase = count % period / period
-                sin_phase = np.sin(2 * np.pi * phase)
-                cos_phase = np.cos(2 * np.pi * phase)
-
-                obs[:3] = omega
-                obs[3:6] = gravity_orientation
-                obs[6:9] = cmd * cmd_scale
-                obs[9 : 9 + num_actions] = qj
-                obs[9 + num_actions : 9 + 2 * num_actions] = dqj
-                obs[9 + 2 * num_actions : 9 + 3 * num_actions] = action
-                obs[9 + 3 * num_actions : 9 + 3 * num_actions + 2] = np.array([sin_phase, cos_phase])
+                obs[:3] = base_vel
+                obs[3:6] = omega 
+                obs[6:9] = gravity_orientation
+                obs[9:12] = cmd
+                obs[12:39] = qj
+                obs[39:66] = dqj
+                obs[66:93] = action
                 obs_tensor = torch.from_numpy(obs).unsqueeze(0)
+
+
                 # policy inference
                 action = policy(obs_tensor).detach().numpy().squeeze()
                 # transform action to target_dof_pos
